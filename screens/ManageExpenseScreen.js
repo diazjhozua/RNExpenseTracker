@@ -1,13 +1,20 @@
 import { StyleSheet, Text, View } from 'react-native'
-import { useContext, useLayoutEffect } from 'react';
+import { useContext, useLayoutEffect, useState } from 'react';
 import React from 'react'
 import IconButton from '../components/UI/IconButton';
 import { GlobalStyles } from '../constants/styles';
 import Button from '../components/UI/Button';
 import { ExpensesContext } from '../store/expenses-context';
 import ExpenseForm from '../components/ManageExpense/ExpenseForm';
+import { deleteExpense, storeExpense, updateExpense } from '../utils/http';
+import LoadingOverlay from '../components/UI/LoadingOverlay';
+import ErrorOverlay from '../components/UI/ErrorOverlay';
 
 const ManageExpenseScreen = ({ route, navigation }) => {
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState()
+
+
   const expensesCtx = useContext(ExpensesContext);
   const editedExpenseId = route.params?.expenseId;
   const isEditing = !!editedExpenseId;
@@ -21,21 +28,55 @@ const ManageExpenseScreen = ({ route, navigation }) => {
 
   }, [navigation, isEditing]);
 
-  function deleteExpenseHandler() {
-    expensesCtx.deleteExpense(editedExpenseId);
-    navigation.goBack();
+  async function deleteExpenseHandler() {
+    setIsLoading(true);
+    try {
+      await deleteExpense(editedExpenseId);
+      expensesCtx.deleteExpense(editedExpenseId);
+      navigation.goBack();
+    } catch (error) {
+      setError('Cound not delete expense - please try again later');
+      setIsLoading(false);
+    }
+
+
   }
 
   function cancelHandler() {
     navigation.goBack();
   }
-  function confirmHandler(expenseData) {
-    if (isEditing) {
-      expensesCtx.updateExpense(editedExpenseId, expenseData)
-    } else {
-      expensesCtx.addExpense(expenseData)
+
+
+  async function confirmHandler(expenseData) {
+    setIsLoading(true);
+
+    try {
+      if (isEditing) {
+        expensesCtx.updateExpense(editedExpenseId, expenseData)
+        await updateExpense(editedExpenseId, expenseData)
+      } else {
+        const id = await storeExpense(expenseData)
+        expensesCtx.addExpense({ ...expenseData, id: id })
+      }
+
+      navigation.goBack();
+    } catch (error) {
+      setError(`Cound not ${isEditing ? 'Update' : 'Add'} expense - please try again later`);
+      setIsLoading(false);
     }
-    navigation.goBack();
+
+  }
+
+  function errorHandler() {
+    setError(null);
+  }
+
+  if (error && !isLoading) {
+    return <ErrorOverlay message={error} onConfirm={errorHandler} />
+  }
+
+  if (isLoading) {
+    return <LoadingOverlay />
   }
 
   return (
